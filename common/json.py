@@ -1,8 +1,6 @@
 from json import JSONEncoder
-
-from datetime import datetime
-
 from django.db.models import QuerySet
+from datetime import datetime
 
 
 class DateEncoder(JSONEncoder):
@@ -26,9 +24,7 @@ class ModelEncoder(DateEncoder, QuerySetEncoder, JSONEncoder):
 
     def default(self, o):
         if isinstance(o, self.model):
-
             d = {}
-            # if o has the attribute get_api_url
             if hasattr(o, "get_api_url"):
                 d["href"] = o.get_api_url()
             for property in self.properties:

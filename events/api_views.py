@@ -8,6 +8,8 @@ from django.views.decorators.http import require_http_methods
 
 import json
 
+from .acls import get_photo, get_weather_data
+
 
 class LocationListEncoder(ModelEncoder):
     model = Location
@@ -37,9 +39,11 @@ class LocationDetailEncoder(ModelEncoder):
     properties = [
         "name",
         "city",
+        "state",
         "room_count",
         "created",
         "updated",
+        "picture_url",
     ]
 
     def get_extra_data(self, o):
@@ -83,8 +87,11 @@ class ConferenceListEncoder(ModelEncoder):
 def api_show_conference(request, pk):
     if request.method == "GET":
         conference = Conference.objects.get(id=pk)
+        city = conference.location.city
+        state = conference.location.state.abbreviation
+        weather = get_weather_data(city, state)
         return JsonResponse(
-            conference,
+            {"conference": conference, "weather": weather},
             encoder=ConferenceDetailEncoder,
             safe=False,
         )
@@ -100,6 +107,11 @@ def api_show_conference(request, pk):
                 {"message": "Invalid Location"},
                 status=400,
             )
+        except Conference.DoesNotExist:
+            return JsonResponse(
+                {"message": "Invalid conference"},
+                status=400,
+            )
 
         conference = Conference.objects.update(**content)
         return JsonResponse(
@@ -107,32 +119,58 @@ def api_show_conference(request, pk):
             encoder=ConferenceDetailEncoder,
             safe=False,
         )
-
+    
     elif request.method == "DELETE":
         count, _ = Conference.objects.filter(id=pk).delete()
         return JsonResponse({"deleted": count > 0})
 
 
+
 @require_http_methods(["GET", "POST"])
 def api_list_locations(request):
+    """
+    Lists the location names and the link to the location.
+
+    Returns a dictionary with a single key "locations" which
+    is a list of location names and URLS. Each entry in the list
+    is a dictionary that contains the name of the location and
+    the link to the location's information.
+
+    {
+        "locations": [
+            {
+                "name": location's name,
+                "href": URL to the location,
+            },
+            ...
+        ]
+    }
+    """
     if request.method == "GET":
         locations = Location.objects.all()
         return JsonResponse(
             {"locations": locations},
             encoder=LocationListEncoder,
-            )
-    else:  # POST
+        )
+    else:
         content = json.loads(request.body)
-        # Get the State object and put it in the content dict
+        print(content)
         try:
             state = State.objects.get(abbreviation=content["state"])
             content["state"] = state
         except State.DoesNotExist:
             return JsonResponse(
-                {"message": "Invalid state abbreviation"}, status=400,
+                {"message": "Invalid state abbreviation"},
+                status=400,
             )
+        img = get_photo(content["city"], content["state"])
+        content["picture_url"] = img
         location = Location.objects.create(**content)
-        return JsonResponse(location, encoder=LocationDetailEncoder, safe=False,)
+        return JsonResponse(
+            location,
+            encoder=LocationDetailEncoder,
+            safe=False,
+        )
 
 
 @require_http_methods(["DELETE", "GET", "PUT"])
