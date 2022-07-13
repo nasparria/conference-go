@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 
-from .models import Attendee
+from .models import Attendee, ConferenceVO
 
 from common.json import ModelEncoder
 
@@ -8,7 +8,12 @@ from django.views.decorators.http import require_http_methods
 
 import json
 
-from events.models import Conference
+# from events.models import Conference
+
+
+class ConferenceVODetailEncoder(ModelEncoder):
+    model = ConferenceVO
+    properties = ["name", "import_href"]
 
 
 class AttendeeListEncoder(ModelEncoder):
@@ -19,9 +24,9 @@ class AttendeeListEncoder(ModelEncoder):
 
 
 @require_http_methods(["GET", "POST"])
-def api_list_attendees(request, conference_id):
+def api_list_attendees(request, conference_vo_id=None):
     if request.method == "GET":
-        attendees = Attendee.objects.filter(conference=conference_id)
+        attendees = Attendee.objects.filter(conference=conference_vo_id)
 
         return JsonResponse(
             {"attendees": attendees},
@@ -31,9 +36,12 @@ def api_list_attendees(request, conference_id):
         content = json.loads(request.body)
         # Get the Conference object and put it in the content dict
         try:
-            conference = Conference.objects.get(id=conference_id)
+            conference_href = content["conference"]
+        # THIS LINE CHANGES TO ConferenceVO and import_href
+            conference = ConferenceVO.objects.get(import_href=conference_href)
+
             content["conference"] = conference
-        except Conference.DoesNotExist:
+        except ConferenceVO.DoesNotExist:
             return JsonResponse(
                 {"message": "Invalid conference id"},
                 status=400,
